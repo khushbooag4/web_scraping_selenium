@@ -12,6 +12,7 @@ website = 'https://ocimpact.com/delegate-roster/'
 driver = webdriver.Chrome()
 driver.get(website)
 
+#CLOSE THE POP UP
 try:    
     close_button = driver.find_element(By.XPATH, '//button[@title="Close"]')
     close_button.click()
