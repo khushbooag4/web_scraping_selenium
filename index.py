@@ -11,11 +11,11 @@ import duckdb
 website = 'https://ocimpact.com/delegate-roster/'
 driver = webdriver.Chrome()
 driver.get(website)
-try:
-    close_button = driver.find_element(By.XPATH, '//button[@title="Close"]')
-    close_button.click()
-except Exception as e:
-    print(str(e))
+# try:
+#     close_button = driver.find_element(By.XPATH, '//button[@title="Close"]')
+#     close_button.click()
+# except Exception as e:
+#     print(str(e))
 
 #Connection to Database
 con = duckdb.connect(database='webscrapedb.db', read_only=False)
@@ -26,66 +26,50 @@ cursor.execute('CREATE TABLE IF NOT EXISTS delegate_info (Name VARCHAR, Job_Titl
 driver.implicitly_wait(10)
 iframe_container = driver.find_element(By.TAG_NAME, 'iframe')
 sublink = iframe_container.get_attribute('data-src');
-driver.switch_to.frame(iframe_container)
+driver.get(sublink)
 a_tags = driver.find_elements(By.TAG_NAME, "a")
+try:
+    for index in range(0, len(a_tags), 2):
+        a_tags = driver.find_elements(By.TAG_NAME, "a")  # Re-locate the elements
+        a_tag = a_tags[index]
 
-print(len(a_tags));
-links = []
-for index, a_tag in enumerate(a_tags):
-    print(a_tag.text)
-    links.append(a_tag.text)
-    try:
-        a_tag.send_keys(Keys.CONTROL + Keys.RETURN)
-        # Switch to the new window
-        driver.switch_to.window(driver.window_handles[1])
-        #driver.implicitly_wait(200)
-        WebDriverWait(driver, 200).until(EC.presence_of_element_located((By.XPATH, '//h2')))
-        #driver.implicitly_wait(200)
-        time.sleep(2)
-        name = driver.find_element(By.TAG_NAME, 'h2').text
-        h4_contents = driver.find_elements(By.TAG_NAME, 'h4')
-        print("Name: " + name)
-        job_title = ""
-        organization = ""
-        for content in h4_contents:
-            if(job_title == ""):
-                job_title = content.text
-            elif(organization == ""):
-                organization = content.text
-            else:
-                continue
-        print("================================ " + job_title + " ================================ "+organization)
-        divs = driver.find_elements(By.TAG_NAME, "div")
-        questions = driver.find_elements(By.XPATH, "//div[@class='expandable-content__ChildrenWrapper-ui__sc-1k0xztj-3 dCtHth']")
-        answers = []
-        for q in questions:
-            answers.append(q.text)
-        print(len(answers))
-        print(answers)
-        # Insert data into DuckDB table
-        cursor.execute("INSERT INTO delegate_info VALUES (?, ?, ?, ?, ?, ?)", (name, job_title, organization, answers[1], answers[2], answers[3]))
-        driver.implicitly_wait(10)
-        cursor.execute('SELECT * FROM delegate_info')
-        result = cursor.fetchall()
-        print(result)
-        # Close the current window
-        driver.close()
-        
-        # Switch back to the original window
-        driver.switch_to.window(driver.window_handles[0])
-        a_tag = driver.find_elements(By.TAG_NAME, "a")[index]
-    except StaleElementReferenceException:
-        # Re-fetch a_tag in case of a stale element
-        a_tag = driver.find_elements(By.TAG_NAME, "a")[index]
-        print(a_tag.text)
-
-    
+        href_attribute = a_tag.get_attribute("href")
+        if href_attribute:
+            driver.get(href_attribute)
+            WebDriverWait(driver, 200).until(EC.presence_of_element_located((By.XPATH, '//h2')))
+            time.sleep(2)
+            
+            name = driver.find_element(By.XPATH, '//h2[@class="style__Name-cmp__sc-1s7e137-1 jhjTCw"]').text
+            job_title = driver.find_element(By.XPATH, "//h4[@class='style__Job-cmp__sc-1s7e137-2 dzeTcv']").text
+            organization = driver.find_element(By.XPATH, '//h3[@class="style__Organization-cmp__sc-1s7e137-3 cVzOUy"]').text
+            questions = driver.find_elements(By.XPATH, "//div[@class='expandable-content__ExpandableWrapper-ui__sc-1k0xztj-0 kutcyn']")
+            answers = []
+            for ques in questions:
+                ques.find_element(By.XPATH, '//div[@class="expandable-content__ChildrenWrapper-ui__sc-1k0xztj-3 dCtHth"]')
+                answers.append(ques.text)
+                
+            size = len(answers)
+            print(size)
+            while(len(answers) < 3):
+               answers.append("Not Answered") #missing value
+            print(answers)
+            # Insert data into DuckDB table
+            cursor.execute("INSERT INTO delegate_info VALUES (?, ?, ?, ?, ?, ?)", (name, job_title, organization, answers[0], answers[1], answers[2]))
+            driver.implicitly_wait(10)
+            # Switch back to the original window
+            # driver.switch_to.window(driver.window_handles[0])
+            driver.back()
+            time.sleep(2)
+        else:
+            print("Skipped")
+finally:
+    # Close the web driver
+    driver.quit()
+    con.close()
 
 # Retrieve data from DuckDB table
 cursor.execute('SELECT * FROM delegate_info')
 result = cursor.fetchall()
 print(result)
 
-# Close the web driver
-driver.quit()
-con.close()
+
